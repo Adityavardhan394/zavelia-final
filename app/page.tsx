@@ -29,6 +29,9 @@ export default function Home() {
   const [customer, setCustomer] = useState({name:"", phone:"", address:"", pincode:""});
   const [quantities, setQuantities] = useState<Record<number,number>>({});
   const [notice, setNotice] = useState("");
+  /* ── mobile category sidebar ── */
+  const [activeCategory, setActiveCategory] = useState<string>("All");
+  const [filterOpen, setFilterOpen] = useState(false);
 
   /* ── wishlist ── */
   const [saved, setSaved] = useState<string[]>(()=>loadJSON<string[]>("zavelia-wishlist",[]));
@@ -108,7 +111,13 @@ export default function Home() {
 
 
 
-  const results = useMemo(() => products.filter(p => `${p.name} ${p.category}`.toLowerCase().includes(query.toLowerCase())), [query,products]);
+  const filteredByCategory = useMemo(() => activeCategory === "All" ? products : products.filter(p => p.category.toLowerCase() === activeCategory.toLowerCase()), [activeCategory, products]);
+  const results = useMemo(() => filteredByCategory.filter(p => `${p.name} ${p.category}`.toLowerCase().includes(query.toLowerCase())), [query,filteredByCategory]);
+  const categoryList = useMemo(() => {
+    const cats = new Map<string,number>();
+    products.forEach(p => cats.set(p.category, (cats.get(p.category)||0)+1));
+    return [{name:"All", count:products.length}, ...Array.from(cats, ([name,count])=>({name, count}))];
+  }, [products]);
   const toggleSaved=(id:number)=>setSaved(s=>{const next=s.includes(String(id))?s.filter(x=>x!==String(id)):[...s,String(id)];saveJSON("zavelia-wishlist",next);return next});
 
   /* ── cart helpers (quantity-based) ── */
@@ -220,8 +229,47 @@ export default function Home() {
       </div>
     </header>
 
-    {/* ── Mobile menu ── */}
-    {menu && <div className="overlay" role="dialog" aria-modal="true" aria-label="Navigation menu"><button className="close" onClick={() => setMenu(false)} aria-label="Close menu">×</button><p className="eyebrow">EXPLORE ZAVÉLIA</p>{['New In','Jewellery','Beauty','Accessories','Hair Accessories','Bags & Wallets','Gifting','Offers'].map(x => <a href="#content" onClick={() => setMenu(false)} key={x}>{x}<span>→</span></a>)}</div>}
+    {/* ── Mobile menu (sidebar style) ── */}
+    {menu && <div className="mobile-sidebar-backdrop" onClick={()=>setMenu(false)}>
+      <aside className="mobile-sidebar" onClick={e=>e.stopPropagation()}>
+        <div className="mobile-sidebar-head">
+          <span className="logo" style={{fontSize:20}}>ZAVÉLIA</span>
+          <button className="mobile-sidebar-close" onClick={()=>setMenu(false)} aria-label="Close menu">×</button>
+        </div>
+        <nav className="mobile-sidebar-nav">
+          <p className="mobile-nav-label">EXPLORE</p>
+          {['New In','Jewellery','Beauty','Accessories','Gifting'].map(x => <a href="#new-in" onClick={()=>{setMenu(false);if(x!=='New In'&&x!=='Gifting')setActiveCategory(x)}} key={x}>{x}</a>)}
+          <p className="mobile-nav-label" style={{marginTop:24}}>ACCOUNT</p>
+          <a href="#" onClick={(e)=>{e.preventDefault();setMenu(false);user?setHistoryOpen(true):setAuthOpen(true)}}>{user?`Hi, ${user.name}`:'Sign In / Register'}</a>
+          {user&&<a href="#" onClick={(e)=>{e.preventDefault();setMenu(false);setHistoryOpen(true)}}>My Orders</a>}
+          <a href="#" onClick={(e)=>{e.preventDefault();setMenu(false);setWishlistOpen(true)}}>Wishlist ({saved.length})</a>
+          <p className="mobile-nav-label" style={{marginTop:24}}>HELP</p>
+          <a href="https://wa.me/919063266307" target="_blank" rel="noreferrer">WhatsApp Support</a>
+          <a href="mailto:adityavardhan394@gmail.com">Email Us</a>
+        </nav>
+      </aside>
+    </div>}
+
+    {/* ── Mobile category filter sidebar ── */}
+    {filterOpen && <div className="mobile-sidebar-backdrop" onClick={()=>setFilterOpen(false)}>
+      <aside className="mobile-sidebar mobile-filter-sidebar" onClick={e=>e.stopPropagation()}>
+        <div className="mobile-sidebar-head">
+          <span style={{font:'700 10px Arial',letterSpacing:'.2em'}}>FILTER BY</span>
+          <button className="mobile-sidebar-close" onClick={()=>setFilterOpen(false)} aria-label="Close filter">×</button>
+        </div>
+        <div className="mobile-filter-list">
+          {categoryList.map(c => (
+            <button key={c.name} className={`mobile-filter-item${activeCategory===c.name?' active':''}`} onClick={()=>{setActiveCategory(c.name);setFilterOpen(false)}}>
+              <span>{c.name}</span>
+              <em>{c.count}</em>
+            </button>
+          ))}
+        </div>
+        <div className="mobile-filter-footer">
+          <button className="mobile-filter-clear" onClick={()=>{setActiveCategory("All");setFilterOpen(false)}}>SHOW ALL PRODUCTS</button>
+        </div>
+      </aside>
+    </div>}
 
     {/* ── Search ── */}
     {search && <div className="search-panel" role="dialog" aria-modal="true" aria-label="Search products"><div><label htmlFor="search">What are you looking for?</label><input autoFocus id="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Try 'gold hoops' or 'serum'"/><button onClick={() => setSearch(false)} aria-label="Close search">×</button></div><p className="eyebrow">{query ? `${results.length} RESULTS` : 'POPULAR NOW'}</p>{(query ? results : products.slice(0,3)).map(p => <button className="search-result" key={p.name} onClick={() => {setSearch(false); document.getElementById('new-in')?.scrollIntoView()}}><img src={p.image} alt=""/><span>{p.name}<small>{p.category} · ₹{p.price.toLocaleString('en-IN')}</small></span><b>→</b></button>)}</div>}
@@ -320,8 +368,9 @@ export default function Home() {
 
     {/* ── Products ── */}
     <section className="new" id="new-in">
-      <div className="section-head"><div><p className="eyebrow">FRESHLY CURATED</p><h2>Accessories & beauty</h2></div><span>{products.length} PRODUCTS</span></div>
-      <div className="product-grid">{products.map(p => {
+      <div className="section-head"><div><p className="eyebrow">FRESHLY CURATED</p><h2>Accessories & beauty</h2></div><div className="section-head-right"><button className="mobile-filter-btn" onClick={()=>setFilterOpen(true)}>{activeCategory!=='All'?activeCategory:'FILTER'} <span>≡</span></button><span className="desktop-product-count">{products.length} PRODUCTS</span></div></div>
+      {activeCategory!=='All' && <div className="active-filter-bar"><span>Showing: <strong>{activeCategory}</strong> ({filteredByCategory.length} items)</span><button onClick={()=>setActiveCategory("All")}>Clear filter ×</button></div>}
+      <div className="product-grid">{filteredByCategory.map(p => {
         const qty = quantities[p.id] ?? 1;
         return <article className="product" key={p.id}>
           <div className="product-image">
