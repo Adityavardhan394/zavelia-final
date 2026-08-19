@@ -68,7 +68,7 @@ export default function AdminClient({user}:{user:string}){
   },[]);
 
   /* ── Load data ── */
-  const loadProducts=useCallback(async()=>{const stored=loadJSON<Product[]>("zavelia-products",null);if(stored&&stored.length>0){setProducts(stored);return}try{const r=await fetch("/api/admin/products",{cache:"no-store",credentials:"same-origin"});const d=await r.json();if(d.products&&d.products.length>0){setProducts(d.products)}else{setProducts(SEED_PRODUCTS);persistProducts(SEED_PRODUCTS)}}catch{setProducts(SEED_PRODUCTS);persistProducts(SEED_PRODUCTS)}},[]);
+  const loadProducts=useCallback(async()=>{const stored=loadJSON<Product[]|null>("zavelia-products",null);if(stored&&stored.length>0){setProducts(stored);return}try{const r=await fetch("/api/admin/products",{cache:"no-store",credentials:"same-origin"});const d=await r.json();if(d.products&&d.products.length>0){setProducts(d.products)}else{setProducts(SEED_PRODUCTS);persistProducts(SEED_PRODUCTS)}}catch{setProducts(SEED_PRODUCTS);persistProducts(SEED_PRODUCTS)}},[]);
   const loadOrders=useCallback(async()=>{
     /* Read storefront orders from localStorage (authoritative for status) */
     const sfOrders=loadJSON<any[]>("zavelia-orders",[]);
