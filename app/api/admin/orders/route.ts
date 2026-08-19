@@ -1,7 +1,15 @@
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { orders } from "../../../../db/schema";
 import { getChatGPTUser } from "../../../chatgpt-auth";
+
+/* ── Order status: must match db/schema.ts orders.status enum ── */
+const ORDER_STATUSES = ["pending", "confirmed", "shipped", "delivered", "cancelled"] as const;
+type OrderStatus = (typeof ORDER_STATUSES)[number];
+
+function isOrderStatus(value: unknown): value is OrderStatus {
+  return typeof value === "string" && ORDER_STATUSES.includes(value as OrderStatus);
+}
 
 const admins = new Set(["padbhog@gmail.com", "adityavardhan394@gmail.com"]);
 async function authorized() {
@@ -24,20 +32,41 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   if (!await authorized()) return Response.json({ error: "Unauthorized" }, { status: 401 });
-  const body = (await request.json()) as { id?: number; ref?: string; status: string };
-  if (!body.status) return Response.json({ error: "Missing status" }, { status: 400 });
-  if (!body.id && !body.ref) return Response.json({ error: "Missing id or ref" }, { status: 400 });
+
+  const body = (await request.json()) as { id?: number; ref?: string; status?: unknown };
+
+  /* Validate status */
+  if (!body.status || !isOrderStatus(body.status)) {
+    return Response.json(
+      { error: "Invalid order status", allowedStatuses: ORDER_STATUSES },
+      { status: 400 }
+    );
+  }
+
+  /* Validate identifier: need either ref or id */
+  if (!body.ref && !body.id) {
+    return Response.json({ error: "Missing order identifier (id or ref)" }, { status: 400 });
+  }
+
   try {
     const db = await getDb();
-    if (!db) return Response.json({ error: "Database not available", fallback: true }, { status: 503 });
-    const { eq, and } = await import("drizzle-orm");
+    if (!db) return Response.json({ error: "Database not available" }, { status: 503 });
+
     /* Match by ref (from localStorage orders) or by id (from DB orders) */
-    const condition = body.ref ? eq(orders.ref, body.ref) : eq(orders.id, body.id!);
-    const [updated] = await db.update(orders).set({ status: body.status }).where(condition).returning();
+    const condition = body.ref
+      ? eq(orders.ref, body.ref)
+      : eq(orders.id, body.id as number);
+
+    const [updated] = await db
+      .update(orders)
+      .set({ status: body.status })
+      .where(condition)
+      .returning();
+
     if (!updated) return Response.json({ error: "Order not found" }, { status: 404 });
     return Response.json({ order: updated });
   } catch (e) {
     console.error("Admin orders PATCH error:", e);
-    return Response.json({ error: "Failed to update order", fallback: true }, { status: 500 });
+    return Response.json({ error: "Failed to update order" }, { status: 500 });
   }
 }
