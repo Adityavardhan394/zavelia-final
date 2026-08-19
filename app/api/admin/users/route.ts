@@ -14,15 +14,7 @@ export async function GET() {
   try {
     const db = await getDb();
     if (!db) return Response.json({ users: [] });
-    const rows = await db.select({
-      id: adminUsers.id,
-      name: adminUsers.name,
-      email: adminUsers.email,
-      role: adminUsers.role,
-      modules: adminUsers.modules,
-      active: adminUsers.active,
-      createdAt: adminUsers.createdAt,
-    }).from(adminUsers).orderBy(asc(adminUsers.id));
+    const rows = await db.select().from(adminUsers).orderBy(asc(adminUsers.id));
     return Response.json({ users: rows });
   } catch {
     return Response.json({ users: [] });

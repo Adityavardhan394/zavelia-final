@@ -14,13 +14,7 @@ export async function GET() {
   try {
     const db = await getDb();
     if (!db) return Response.json({ customers: [] });
-    const rows = await db.select({
-      id: customers.id,
-      name: customers.name,
-      email: customers.email,
-      phone: customers.phone,
-      createdAt: customers.createdAt,
-    }).from(customers).orderBy(desc(customers.id));
+    const rows = await db.select().from(customers).orderBy(desc(customers.id));
     return Response.json({ customers: rows });
   } catch {
     return Response.json({ customers: [] });
