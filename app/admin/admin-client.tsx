@@ -10,19 +10,9 @@ type AdminUser={id:number;name:string;email:string;role:string;modules:string;ac
 type Tab="dashboard"|"products"|"orders"|"customers"|"users"|"settings";
 type Settings={announcement:string;minFreeShipping:number;shippingCost:number;whatsapp:string;email:string};
 const MODULES=["dashboard","products","orders","customers","users","settings"] as const;
-const STATUSES=["pending","confirmed","shipped","delivered","cancelled"] as const;
+const STATUSES=["pending","confirmed","packed","shipped","delivered","cancelled"] as const;
 const empty={name:"",category:"Accessories",description:"",price:"",compareAtPrice:"",discount:"",image:"",tag:"NEW",stock:"0",published:true,featured:false};
 const defaultSettings:Settings={announcement:"COMPLIMENTARY SHIPPING ABOVE ₹999 • EASY 7-DAY RETURNS",minFreeShipping:999,shippingCost:49,whatsapp:"919063266307",email:"adityavardhan394@gmail.com"};
-
-/* ── Seed products (fallback when API unavailable) ── */
-const SEED_PRODUCTS:Product[]=[
-  {id:1,name:"Saanjh Pearl Hoops",category:"Jewellery",description:"Lightweight pearl-accent hoops with a polished gold-tone finish.",price:1299,compareAtPrice:1599,image:"https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=900&q=85",tag:"BESTSELLER",stock:18,published:true,featured:true},
-  {id:2,name:"Noor Layered Necklace",category:"Jewellery",description:"A delicate layered necklace designed for everyday styling and gifting.",price:1899,compareAtPrice:2299,image:"https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=900&q=85",tag:"NEW",stock:12,published:true,featured:true},
-  {id:3,name:"Luma Dew Serum",category:"Beauty",description:"A lightweight hydrating face serum for a fresh, dewy finish.",price:899,compareAtPrice:null,image:"https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=900&q=85",tag:"BEAUTY",stock:25,published:true,featured:true},
-  {id:4,name:"Mira Mini Bag",category:"Accessories",description:"A compact statement bag with a structured silhouette and versatile strap.",price:2199,compareAtPrice:2699,image:"https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=900&q=85",tag:"LIMITED",stock:9,published:true,featured:true},
-  {id:5,name:"Velvet Bloom Lip Tint",category:"Beauty",description:"A soft-focus lip tint with comfortable colour for day-to-evening wear.",price:649,compareAtPrice:799,image:"https://images.unsplash.com/photo-1586495777744-4413f21062fa?auto=format&fit=crop&w=900&q=85",tag:"TRENDING",stock:30,published:true,featured:false},
-  {id:6,name:"Aira Hair Claw Set",category:"Accessories",description:"Three polished hair claws in versatile neutral tones.",price:499,compareAtPrice:599,image:"https://images.unsplash.com/photo-1596944924616-7b38e7cfac36?auto=format&fit=crop&w=900&q=85",tag:"NEW",stock:40,published:true,featured:false},
-];
 
 /* ── Helpers ── */
 const loadJSON=<T,>(k:string,f:T):T=>{if(typeof window==="undefined")return f;try{return JSON.parse(localStorage.getItem(k)||"null")??f}catch{return f}};
@@ -33,7 +23,7 @@ const fmt=(n:number)=>"₹"+n.toLocaleString("en-IN");
 export default function AdminClient({user}:{user:string}){
   /* ── State: safe defaults that match SSR (no hydration mismatch) ── */
   const [tab,setTab]=useState<Tab>("dashboard");
-  const [products,setProducts]=useState<Product[]>(SEED_PRODUCTS);
+  const [products,setProducts]=useState<Product[]>([]);
   const [orders,setOrders]=useState<Order[]>([]);
   const [customers,setCustomers]=useState<Customer[]>([]);
   const [users,setUsers]=useState<AdminUser[]>([]);
@@ -42,56 +32,25 @@ export default function AdminClient({user}:{user:string}){
   const [msg,setMsg]=useState("");
   const [editId,setEditId]=useState<number|null>(null);
   const [orderFilter,setOrderFilter]=useState("all");
+  const [productSearch,setProductSearch]=useState("");
+  const [orderSearch,setOrderSearch]=useState("");
+  const [selectedOrder,setSelectedOrder]=useState<Order|null>(null);
   const [userForm,setUserForm]=useState({name:"",email:"",password:"",role:"staff",modules:"[]"});
   const [userMsg,setUserMsg]=useState("");
   const [mounted,setMounted]=useState(false);
-  const [localOrderRefs,setLocalOrderRefs]=useState<Set<string>>(new Set());
 
   /* ── After mount: sync state from localStorage + hash ── */
   useEffect(()=>{
     setMounted(true);
     const hash=window.location.hash.slice(1) as Tab;
     if(hash&&MODULES.includes(hash as typeof MODULES[number]))setTab(hash);
-    const storedProducts=loadJSON<Product[]|null>("zavelia-products",null);
-    if(storedProducts&&storedProducts.length>0)setProducts(storedProducts);
-    const storedOrders=loadJSON<any[]>("zavelia-orders",[]);
-    if(storedOrders.length>0){
-      const adminOrders:Order[]=storedOrders.map((o,i)=>({
-        id:i+1,ref:o.ref||"",items:JSON.stringify(o.items||[]),subtotal:o.subtotal||0,shipping:o.shipping||0,total:o.total||0,
-        status:o.status||"pending",customerName:o.customerName||"",customerPhone:o.customerPhone||"",
-        address:o.address||"",pincode:o.pincode||"",createdAt:o.date||new Date().toISOString()
-      }));
-      setOrders(adminOrders);
-    }
     const storedSettings=loadJSON<Settings>("zavelia-settings",defaultSettings);
     setSettings(storedSettings);
   },[]);
 
   /* ── Load data ── */
-  const loadProducts=useCallback(async()=>{const stored=loadJSON<Product[]|null>("zavelia-products",null);if(stored&&stored.length>0){setProducts(stored);return}try{const r=await fetch("/api/admin/products",{cache:"no-store",credentials:"same-origin"});const d=await r.json();if(d.products&&d.products.length>0){setProducts(d.products)}else{setProducts(SEED_PRODUCTS);persistProducts(SEED_PRODUCTS)}}catch{setProducts(SEED_PRODUCTS);persistProducts(SEED_PRODUCTS)}},[]);
-  const loadOrders=useCallback(async()=>{
-    /* Read storefront orders from localStorage (authoritative for status) */
-    const sfOrders=loadJSON<any[]>("zavelia-orders",[]);
-    const localRefs=new Set<string>();
-    const mapped:Order[]=sfOrders.map((o,i)=>{
-      localRefs.add(o.ref||"");
-      return{
-        id:i+1,ref:o.ref||"",items:JSON.stringify(o.items||[]),subtotal:o.subtotal||0,shipping:o.shipping||0,total:o.total||0,
-        status:o.status||"pending",customerName:o.customerName||"",customerPhone:o.customerPhone||"",
-        address:o.address||"",pincode:o.pincode||"",createdAt:o.date||new Date().toISOString()
-      };
-    });
-    setLocalOrderRefs(localRefs);
-    try{
-      const r=await fetch("/api/admin/orders",{cache:"no-store"});
-      const d=await r.json();
-      const apiOrders=(d.orders||[]) as Order[];
-      /* For orders in both sources, localStorage wins (has latest status changes) */
-      const localRefSet=new Set(mapped.map(o=>o.ref));
-      const dbOnly=apiOrders.filter(o=>!localRefSet.has(o.ref));
-      setOrders([...mapped,...dbOnly]);
-    }catch{setOrders(mapped)}
-  },[]);
+  const loadProducts=useCallback(async()=>{try{const r=await fetch("/api/admin/products",{cache:"no-store",credentials:"same-origin"});const d=await r.json();if(d.products)setProducts(d.products)}catch{}},[]);
+  const loadOrders=useCallback(async()=>{try{const r=await fetch("/api/admin/orders",{cache:"no-store"});const d=await r.json();setOrders((d.orders||[])as Order[])}catch{setOrders([])}},[]);
   const loadCustomers=useCallback(async()=>{try{const r=await fetch("/api/admin/customers",{cache:"no-store"});const d=await r.json();setCustomers(d.customers||[])}catch{setCustomers([])}},[]);
   const loadUsers=useCallback(async()=>{try{const r=await fetch("/api/admin/users",{cache:"no-store"});const d=await r.json();setUsers(d.users||[])}catch{setUsers([])}},[]);
   const loadAll=useCallback(()=>{loadProducts();loadOrders();loadCustomers();loadUsers()},[loadProducts,loadOrders,loadCustomers,loadUsers]);
@@ -100,70 +59,37 @@ export default function AdminClient({user}:{user:string}){
   useEffect(()=>{if(typeof window==="undefined")return;const h=()=>loadAll();window.addEventListener("zavelia-sync",h);document.addEventListener("visibilitychange",()=>{if(!document.hidden)loadAll()});return()=>{window.removeEventListener("zavelia-sync",h)}},[loadAll]);
 
   /* ── Product CRUD ── */
-  const persistProducts=(prods:Product[])=>{saveJSON("zavelia-products",prods);bump()};
   const saveProduct=async(e:React.FormEvent)=>{
     e.preventDefault();setMsg("");
     const data={...form,price:Number(form.price),compareAtPrice:form.compareAtPrice?Number(form.compareAtPrice):null,discount:form.discount?Number(form.discount):0,stock:Number(form.stock)};
-    let usedFallback=false;
     try{
       if(editId){
         const r=await fetch(`/api/admin/products/${editId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
         if(!r.ok){setMsg("Could not update product.");return}
-        const d=await r.json();
-        if(d.fallback){usedFallback=true;setProducts(prev=>{const next=prev.map(p=>p.id===editId?{...p,...data}:p);persistProducts(next);return next})}
       } else {
         const r=await fetch("/api/admin/products",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
         if(!r.ok){try{const d=await r.json();setMsg(d.error||"Could not save product.")}catch{setMsg("Could not save product.")}return}
-        const d=await r.json();
-        if(d.fallback){usedFallback=true;const newProd={...data,id:Date.now()};setProducts(prev=>{const next=[...prev,newProd];persistProducts(next);return next})}
       }
-    }catch{setMsg("Network error. Changes saved locally.");return}
-    setForm(empty);setEditId(null);setMsg(editId?"Product updated.":"Product created.");bump();if(!usedFallback)loadProducts();setTimeout(()=>setMsg(""),3000);
+    }catch{setMsg("Network error. Please try again.");return}
+    setForm(empty);setEditId(null);setMsg(editId?"Product updated.":"Product created.");loadProducts();setTimeout(()=>setMsg(""),3000);
   };
-  const patchProduct=async(id:number,data:Record<string,unknown>)=>{await fetch(`/api/admin/products/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});setProducts(prev=>{const next=prev.map(p=>p.id===id?{...p,...data}as Product:p);persistProducts(next);return next});bump()};
-  const deleteProduct=async(id:number,name:string)=>{if(!confirm(`Delete ${name}?`))return;await fetch(`/api/admin/products/${id}`,{method:"DELETE"});setProducts(prev=>{const next=prev.filter(p=>p.id!==id);persistProducts(next);return next});bump()};
+  const patchProduct=async(id:number,data:Record<string,unknown>)=>{await fetch(`/api/admin/products/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});loadProducts()};
+  const deleteProduct=async(id:number,name:string)=>{if(!confirm(`Delete ${name}?`))return;await fetch(`/api/admin/products/${id}`,{method:"DELETE"});loadProducts()};
   const startEdit=(p:Product)=>{setEditId(p.id);setForm({name:p.name,category:p.category,description:p.description,price:String(p.price),compareAtPrice:p.compareAtPrice?String(p.compareAtPrice):"",discount:p.discount?String(p.discount):"",image:p.image,tag:p.tag,stock:String(p.stock),published:p.published,featured:p.featured});setTab("products");if(typeof document!=="undefined")document.getElementById("product-form")?.scrollIntoView({behavior:"smooth"})};
 
   /* ── Order status ── */
   const updateOrderStatus=async(id:number,status:string)=>{
     const order=orders.find(o=>o.id===id);
     const ref=order?.ref||"";
-    const isLocal=localOrderRefs.has(ref);
-
-    /* Always update localStorage first (authoritative for status) */
-    const sfOrders=loadJSON<any[]>("zavelia-orders",[]);
-    if(sfOrders.length>0){
-      const updated=sfOrders.map((o:any)=>{
-        if(ref&&o.ref===ref) return{...o,status};
-        return o;
-      });
-      saveJSON("zavelia-orders",updated);
+    try{
+      await fetch("/api/admin/orders",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,status})});
+      setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));
+      setMsg(`Order ${ref} updated to "${status}".`);
+      setTimeout(()=>setMsg(""),3000);
+    }catch{
+      setMsg("Failed to update order status.");
+      setTimeout(()=>setMsg(""),3000);
     }
-
-    if(isLocal){
-      /* LocalStorage order: also try to create/sync to DB, then refresh */
-      try{
-        await fetch("/api/orders",{
-          method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({
-            ref,items:order?.items?JSON.parse(order.items):[],
-            subtotal:order?.subtotal||0,shipping:order?.shipping||0,total:order?.total||0,
-            customerName:order?.customerName||"",customerPhone:order?.customerPhone||"",
-            address:order?.address||"",pincode:order?.pincode||""
-          })
-        });
-        await fetch("/api/admin/orders",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({ref,status})});
-      }catch{}
-    }else{
-      /* DB order: update via API */
-      try{await fetch("/api/admin/orders",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,status})})}catch{}
-    }
-
-    /* Update local state immediately */
-    setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));
-    setMsg(`Order ${ref} updated to "${status}".`);
-    setTimeout(()=>setMsg(""),3000);
-    /* Don't call bump() - it triggers loadOrders which would re-read stale API data */
   };
 
   /* ── User CRUD ── */
@@ -184,11 +110,21 @@ export default function AdminClient({user}:{user:string}){
     const pub=products.filter(p=>p.published).length;
     const low=products.filter(p=>p.stock<5).length;
     const pending=orders.filter(o=>o.status==="pending").length;
-    const revenue=orders.filter(o=>o.status!=="cancelled").reduce((s,o)=>s+o.total,0);
+    const revenue=orders.filter(o=>o.status==="confirmed"||o.status==="delivered").reduce((s,o)=>s+o.total,0);
     return{total:products.length,published:pub,hidden:products.length-pub,low,pending,orders:orders.length,customers:customers.length,revenue};
   },[products,orders,customers]);
 
-  const filteredOrders=useMemo(()=>orderFilter==="all"?orders:orders.filter(o=>o.status===orderFilter),[orders,orderFilter]);
+  const filteredOrders=useMemo(()=>{
+    let list=orderFilter==="all"?orders:orders.filter(o=>o.status===orderFilter);
+    if(orderSearch.trim()){const q=orderSearch.toLowerCase();list=list.filter(o=>o.customerName.toLowerCase().includes(q)||o.customerPhone.includes(q)||o.ref.toLowerCase().includes(q))}
+    return list;
+  },[orders,orderFilter,orderSearch]);
+
+  const filteredProducts=useMemo(()=>{
+    if(!productSearch.trim())return products;
+    const q=productSearch.toLowerCase();
+    return products.filter(p=>p.name.toLowerCase().includes(q)||p.category.toLowerCase().includes(q));
+  },[products,productSearch]);
 
   const hasModule=(m:string)=>MODULES.includes(m as typeof MODULES[number]);
 
@@ -274,9 +210,10 @@ export default function AdminClient({user}:{user:string}){
           {msg&&<p className="adm-msg">{msg}</p>}
         </div>
         <div className="adm-card">
-          <div className="adm-card-head"><h2>All Products</h2><span>{products.length} items</span></div>
+          <div className="adm-card-head"><h2>All Products</h2><span>{filteredProducts.length} of {products.length} items</span></div>
+          {products.length>3&&<div style={{padding:"0 0 0.75rem"}}><input placeholder="Search products..." value={productSearch} onChange={e=>setProductSearch(e.target.value)} style={{width:"100%",padding:"0.5rem 0.75rem",border:"1px solid #ddd",borderRadius:6,fontSize:"0.9rem"}}/></div>}
           <div className="adm-product-list">
-            {products.map(p=><article key={p.id} className="adm-product-row">
+            {filteredProducts.map(p=><article key={p.id} className="adm-product-row">
               <img src={p.image} alt={p.name}/>
               <div className="adm-product-info"><h3>{p.name}</h3><span>{p.category}</span></div>
               <div className="adm-product-price"><b>{fmt(p.price)}</b>{p.discount&&p.discount>0?<span className="adm-discount-badge">{p.discount}% OFF</span>:null}{p.compareAtPrice&&p.compareAtPrice>p.price?<del>{fmt(p.compareAtPrice)}</del>:null}</div>
@@ -294,9 +231,10 @@ export default function AdminClient({user}:{user:string}){
           <div className="adm-card-head"><h2>All Orders</h2>
             <div className="adm-filters">{["all",...STATUSES].map(s=><button key={s} className={orderFilter===s?"active":""} onClick={()=>setOrderFilter(s)}>{s==="all"?"All":s.charAt(0).toUpperCase()+s.slice(1)}{s==="all"?` (${orders.length})`:` (${orders.filter(o=>o.status===s).length})`}</button>)}</div>
           </div>
+          {orders.length>3&&<div style={{padding:"0 0 0.75rem"}}><input placeholder="Search by name, phone or ref..." value={orderSearch} onChange={e=>setOrderSearch(e.target.value)} style={{width:"100%",padding:"0.5rem 0.75rem",border:"1px solid #ddd",borderRadius:6,fontSize:"0.9rem"}}/></div>}
           {filteredOrders.length===0?<p className="adm-empty">No orders found.</p>:
           <table className="adm-table adm-orders-table"><thead><tr><th>Reference</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-            {filteredOrders.map(o=><tr key={o.ref||o.id}>
+            {filteredOrders.map(o=><tr key={o.ref||o.id} style={{cursor:"pointer"}} onClick={()=>setSelectedOrder(o)}>
               <td><div className="adm-ref">{o.ref}</div><small>{new Date(o.createdAt).toLocaleDateString("en-IN",{day:"numeric",month:"short"})}</small></td>
               <td><strong>{o.customerName}</strong><br/><small>{o.customerPhone}</small></td>
               <td className="adm-order-items">{(() => { try { return JSON.parse(o.items).map((it:{name:string;qty:number},i:number)=><span key={i}>{it.qty}× {it.name}</span>) } catch { return <span>{o.items}</span> } })()}</td>
@@ -308,6 +246,34 @@ export default function AdminClient({user}:{user:string}){
           {msg&&<p className="adm-msg">{msg}</p>}
         </div>
       </section>}
+
+      {/* ═══ ORDER DETAIL MODAL ═══ */}
+      {selectedOrder && <div className="adm-modal-backdrop" onClick={()=>setSelectedOrder(null)}>
+        <div className="adm-modal" onClick={e=>e.stopPropagation()}>
+          <div className="adm-modal-head"><h2>Order {selectedOrder.ref}</h2><button onClick={()=>setSelectedOrder(null)}>×</button></div>
+          <div className="adm-modal-body">
+            <div className="adm-order-detail-grid">
+              <div><strong>Customer</strong><p>{selectedOrder.customerName}</p><p>{selectedOrder.customerPhone}</p></div>
+              <div><strong>Status</strong><p><span className={`adm-badge status-${selectedOrder.status}`}>{selectedOrder.status}</span></p></div>
+              <div><strong>Date</strong><p>{new Date(selectedOrder.createdAt).toLocaleDateString("en-IN",{day:"numeric",month:"long",year:"numeric"})}</p></div>
+              <div><strong>Delivery</strong><p>{selectedOrder.address}, {selectedOrder.pincode}</p></div>
+            </div>
+            <h3>Items</h3>
+            <table className="adm-table"><thead><tr><th>Product</th><th>Qty</th><th>Price</th></tr></thead><tbody>
+              {(() => { try { return JSON.parse(selectedOrder.items).map((it:{name:string;qty:number;price:number},i:number)=><tr key={i}><td>{it.name}</td><td>{it.qty}</td><td>{fmt(it.price*it.qty)}</td></tr>) } catch { return <tr><td>{selectedOrder.items}</td></tr> } })()}
+            </tbody></table>
+            <div className="adm-order-totals">
+              <span>Subtotal <b>{fmt(selectedOrder.subtotal)}</b></span>
+              <span>Shipping <b>{selectedOrder.shipping?fmt(selectedOrder.shipping):"Free"}</b></span>
+              <strong>Total <b>{fmt(selectedOrder.total)}</b></strong>
+            </div>
+            <div style={{marginTop:"1rem",display:"flex",gap:"0.5rem",alignItems:"center"}}>
+              <span>Update status:</span>
+              <select value={selectedOrder.status} onChange={e=>{updateOrderStatus(selectedOrder.id,e.target.value);setSelectedOrder({...selectedOrder,status:e.target.value})}}>{STATUSES.map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}</select>
+            </div>
+          </div>
+        </div>
+      </div>}
 
       {/* ═══ CUSTOMERS ═══ */}
       {tab==="customers" && <section className="adm-section">
@@ -372,9 +338,8 @@ export default function AdminClient({user}:{user:string}){
         <div className="adm-card">
           <div className="adm-card-head"><h2>Sync Status</h2></div>
           <div className="adm-sync-info">
-            <p>All product and settings changes sync automatically to the storefront.</p>
-            <p>Last sync: <strong>{typeof window!=="undefined"?new Date(Number(localStorage.getItem("zavelia-sync")||"0")).toLocaleString("en-IN")||"Never":"Never"}</strong></p>
-            <button className="adm-btn-secondary" onClick={()=>{bump();loadAll();setMsg("Sync triggered.");setTimeout(()=>setMsg(""),2000)}}>FORCE SYNC NOW</button>
+            <p>Products and orders sync automatically from the database.</p>
+            <button className="adm-btn-secondary" onClick={()=>{loadAll();setMsg("Data refreshed.");setTimeout(()=>setMsg(""),2000)}}>REFRESH DATA</button>
           </div>
         </div>
       </section>}

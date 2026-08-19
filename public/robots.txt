@@ -1,6 +1,7 @@
 User-agent: *
 Allow: /
 Disallow: /admin
+Disallow: /admin/
 Disallow: /api/
 
-Sitemap: https://zavelia.com/sitemap.xml
+Sitemap: https://zavelia.in/sitemap.xml

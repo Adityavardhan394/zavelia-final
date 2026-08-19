@@ -14,9 +14,11 @@ const CREATE_TABLES_SQL = `
     description TEXT NOT NULL,
     price INTEGER NOT NULL,
     compare_at_price INTEGER,
+    discount INTEGER NOT NULL DEFAULT 0,
     image TEXT NOT NULL,
     tag TEXT NOT NULL DEFAULT 'NEW',
     stock INTEGER NOT NULL DEFAULT 0,
+    low_stock_threshold INTEGER NOT NULL DEFAULT 5,
     published INTEGER NOT NULL DEFAULT 0,
     featured INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -60,8 +62,24 @@ const CREATE_TABLES_SQL = `
   );
 `;
 
+const SEED_PRODUCTS_SQL = `
+  INSERT OR IGNORE INTO products (name, slug, category, description, price, compare_at_price, discount, image, tag, stock, low_stock_threshold, published, featured)
+  VALUES
+    ('Saanjh Pearl Hoops', 'saanjh-pearl-hoops', 'Jewellery', 'Lightweight pearl-accent hoops with a polished gold-tone finish.', 1299, 1599, 0, 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=900&q=85', 'BESTSELLER', 18, 5, 1, 1),
+    ('Noor Layered Necklace', 'noor-layered-necklace', 'Jewellery', 'A delicate layered necklace designed for everyday styling and gifting.', 1899, 2299, 0, 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=900&q=85', 'NEW', 12, 5, 1, 1),
+    ('Luma Dew Serum', 'luma-dew-serum', 'Beauty', 'A lightweight hydrating face serum for a fresh, dewy finish.', 899, NULL, 0, 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=900&q=85', 'BEAUTY', 25, 5, 1, 1),
+    ('Mira Mini Bag', 'mira-mini-bag', 'Accessories', 'A compact statement bag with a structured silhouette and versatile strap.', 2199, 2699, 0, 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=900&q=85', 'LIMITED', 9, 5, 1, 1),
+    ('Velvet Bloom Lip Tint', 'velvet-bloom-lip-tint', 'Beauty', 'A soft-focus lip tint with comfortable colour for day-to-evening wear.', 649, 799, 0, 'https://images.unsplash.com/photo-1586495777744-4413f21062fa?auto=format&fit=crop&w=900&q=85', 'TRENDING', 30, 5, 1, 0),
+    ('Aira Hair Claw Set', 'aira-hair-claw-set', 'Accessories', 'Three polished hair claws in versatile neutral tones.', 499, 599, 0, 'https://images.unsplash.com/photo-1596944924616-7b38e7cfac36?auto=format&fit=crop&w=900&q=85', 'NEW', 40, 5, 1, 0);
+`;
+
+/* Migration: add columns that may be missing from older databases */
+const MIGRATIONS_SQL = `
+  ALTER TABLE products ADD COLUMN discount INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE products ADD COLUMN low_stock_threshold INTEGER NOT NULL DEFAULT 5;
+`;
+
 export async function getDb() {
-  /* ── Return cached D1 instance if already initialized ── */
   if (d1Db && tablesReady) return d1Db;
 
   try {
@@ -70,16 +88,24 @@ export async function getDb() {
       if (!d1Db) {
         d1Db = drizzle(env.DB, { schema });
       }
-      /* Ensure tables exist (idempotent, runs once per process) */
       if (!tablesReady) {
         try {
           await d1Db.run(sql.raw(CREATE_TABLES_SQL));
-          tablesReady = true;
+          /* Run migrations (safe to re-run, ignores duplicate column errors) */
+          for (const stmt of MIGRATIONS_SQL.split(";").filter(s => s.trim())) {
+            try { await d1Db.run(sql.raw(stmt)); } catch { /* column may already exist */ }
+          }
+          /* Seed products if table is empty */
+          const count = await d1Db.run(sql.raw("SELECT COUNT(*) as c FROM products"));
+          const rows = (count as any)?.results;
+          const productCount = Array.isArray(rows) && rows.length > 0 ? Number(rows[0].c) : 0;
+          if (productCount === 0) {
+            await d1Db.run(sql.raw(SEED_PRODUCTS_SQL));
+          }
         } catch (e) {
-          console.error("[DB] D1 table creation error:", e);
-          /* Tables might already exist, continue anyway */
-          tablesReady = true;
+          console.error("[DB] D1 initialization error:", e);
         }
+        tablesReady = true;
       }
       return d1Db;
     }
@@ -87,7 +113,7 @@ export async function getDb() {
     // cloudflare:workers not available
   }
 
-  /* ── Fallback: try local better-sqlite3 ── */
+  /* Fallback: local better-sqlite3 */
   try {
     const { drizzle: drizzleLocal } = await import("drizzle-orm/better-sqlite3");
     const Database = (await import("better-sqlite3")).default;
@@ -99,6 +125,17 @@ export async function getDb() {
 
     if (!existsSync(dbPath) || sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().length === 0) {
       sqlite.exec(CREATE_TABLES_SQL);
+    }
+
+    /* Run migrations on existing databases (add missing columns) */
+    for (const stmt of MIGRATIONS_SQL.split(";").filter(s => s.trim())) {
+      try { sqlite.exec(stmt); } catch { /* column may already exist */ }
+    }
+
+    /* Seed if empty */
+    const countRow = sqlite.prepare("SELECT COUNT(*) as c FROM products").get() as { c: number };
+    if (countRow.c === 0) {
+      sqlite.exec(SEED_PRODUCTS_SQL);
     }
 
     const localDb = drizzleLocal(sqlite, { schema });

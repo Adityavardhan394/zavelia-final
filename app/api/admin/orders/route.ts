@@ -2,14 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { orders } from "../../../../db/schema";
 import { getChatGPTUser } from "../../../chatgpt-auth";
-
-/* ── Order status: must match db/schema.ts orders.status enum ── */
-const ORDER_STATUSES = ["pending", "confirmed", "shipped", "delivered", "cancelled"] as const;
-type OrderStatus = (typeof ORDER_STATUSES)[number];
-
-function isOrderStatus(value: unknown): value is OrderStatus {
-  return typeof value === "string" && ORDER_STATUSES.includes(value as OrderStatus);
-}
+import { ORDER_STATUSES, isOrderStatus, type OrderStatus } from "../../../../lib/config";
 
 const admins = new Set(["padbhog@gmail.com", "adityavardhan394@gmail.com"]);
 async function authorized() {

@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-type Product={id:number;name:string;category:string;description:string;price:number;compareAtPrice:number|null;image:string;tag:string;stock:number;published:boolean;featured:boolean;discount?:number};
+type Product={id:number;name:string;slug:string;category:string;description:string;price:number;compareAtPrice:number|null;image:string;tag:string;stock:number;published:boolean;featured:boolean;discount?:number};
 type CartLine={product:Product;qty:number};
 type OrderRecord={ref:string;items:{name:string;qty:number;price:number}[];subtotal:number;shipping:number;total:number;status:string;customerName:string;customerPhone:string;address:string;pincode:string;date:string};
 type CustomerUser={name:string;email:string;phone:string};
@@ -45,25 +45,18 @@ export default function Home() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [orders, setOrders] = useState<OrderRecord[]>(()=>loadJSON<OrderRecord[]>("zavelia-orders",[]));
 
-  /* ── load products ── */
+  /* ── load products from API (DB is source of truth) ── */
   const fetchProducts=useCallback(()=>{
-    // First check localStorage for admin-managed products
-    const adminProducts=loadJSON<Product[]|null>("zavelia-products",null);
-    if(adminProducts&&adminProducts.length>0){setProducts(adminProducts);return}
     fetch("/api/products").then(r=>r.json()).then(d=>{if(d.products)setProducts(d.products)});
   },[]);
   useEffect(()=>{fetchProducts()},[fetchProducts]);
 
   /* ── real-time sync from admin ── */
   useEffect(()=>{
-    const onSync=()=>fetchProducts();
-    const onStorage=(e:StorageEvent)=>{if(e.key==="zavelia-sync"||e.key==="zavelia-products")fetchProducts()};
     const onVisibility=()=>{if(!document.hidden)fetchProducts()};
-    window.addEventListener("zavelia-sync",onSync);
-    window.addEventListener("storage",onStorage);
     document.addEventListener("visibilitychange",onVisibility);
-    const poll=setInterval(fetchProducts,8000);
-    return()=>{window.removeEventListener("zavelia-sync",onSync);window.removeEventListener("storage",onStorage);document.removeEventListener("visibilitychange",onVisibility);clearInterval(poll)};
+    const poll=setInterval(fetchProducts,15000);
+    return()=>{document.removeEventListener("visibilitychange",onVisibility);clearInterval(poll)};
   },[fetchProducts]);
 
   /* ── load customer from localStorage ── */
@@ -143,42 +136,50 @@ export default function Home() {
   const subtotal = cart.reduce((s, l) => s + l.product.price * l.qty, 0);
   const shipping = subtotal >= 999 ? 0 : 49;
 
-  /* ── place order ── */
-  const placeOrder=(e:React.FormEvent)=>{
+  /* ── place order (server-side price validation) ── */
+  const [orderProcessing,setOrderProcessing]=useState(false);
+  const placeOrder=async(e:React.FormEvent)=>{
     e.preventDefault();
-    const ref=`ZAV-${crypto.randomUUID().slice(0,8).toUpperCase()}`;
-    const orderItems = cart.map(l => `${l.qty}× ${l.product.name} — ₹${(l.product.price*l.qty).toLocaleString('en-IN')}`).join('\n');
-    const message=`Hello ZAVÉLIA, I would like to place an order.\n\nOrder reference: ${ref}\n${orderItems}\n\nSubtotal: ₹${subtotal.toLocaleString('en-IN')}\nShipping: ${shipping?`₹${shipping}`:'Free'}\nTotal: ₹${(subtotal+shipping).toLocaleString('en-IN')}\n\nCustomer: ${customer.name}\nPhone: ${customer.phone}\nDelivery address: ${customer.address}, PIN ${customer.pincode}\n\nPlease confirm availability and payment details.`;
-    window.open(`https://wa.me/919063266307?text=${encodeURIComponent(message)}`,'_blank','noopener,noreferrer');
+    if(orderProcessing)return;
+    setOrderProcessing(true);
+    try{
+      /* Send cart items as product IDs + quantities for server-side validation */
+      const cartItems=cart.map(l=>({productId:l.product.id,qty:l.qty}));
+      const r=await fetch("/api/orders",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({items:cartItems,customerName:customer.name,customerPhone:customer.phone,customerEmail:user?.email,address:customer.address,pincode:customer.pincode})
+      });
+      const d=await r.json();
+      if(!r.ok||!d.order){setNotice(d.error||"Could not place order. Please try again.");setOrderProcessing(false);return}
 
-    /* save order to history (localStorage) */
-    const record:OrderRecord = {
-      ref,
-      items: cart.map(l => ({ name: l.product.name, qty: l.qty, price: l.product.price })),
-      subtotal, shipping, total: subtotal + shipping,
-      status: "pending",
-      customerName: customer.name, customerPhone: customer.phone,
-      address: customer.address, pincode: customer.pincode,
-      date: new Date().toISOString(),
-    };
-    const allOrders = [record, ...orders];
-    setOrders(allOrders);
-    saveJSON("zavelia-orders", allOrders);
-    if (user) saveJSON(`zavelia-orders-${user.email}`, allOrders);
+      const ref=d.order.ref;
+      const total=d.order.total;
+      const shippingAmt=d.order.shipping;
+      const subtotalAmt=d.order.subtotal;
 
-    /* persist order to database via API (visible in admin on any port) */
-    fetch("/api/orders",{
-      method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        ref,items:record.items,subtotal,shipping,total:subtotal+shipping,
-        customerName:customer.name,customerPhone:customer.phone,
-        customerEmail:user?.email,
-        address:customer.address,pincode:customer.pincode
-      })
-    }).catch(()=>{});
+      /* Build WhatsApp message with server-calculated totals */
+      const orderItems=cart.map(l=>`${l.qty}× ${l.product.name} — ₹${(l.product.price*l.qty).toLocaleString('en-IN')}`).join('\n');
+      const message=`Hello ZAVÉLIA, I would like to place an order.\n\nOrder reference: ${ref}\n${orderItems}\n\nSubtotal: ₹${subtotalAmt.toLocaleString('en-IN')}\nShipping: ${shippingAmt?`₹${shippingAmt}`:'Free'}\nTotal: ₹${total.toLocaleString('en-IN')}\n\nCustomer: ${customer.name}\nPhone: ${customer.phone}\nDelivery address: ${customer.address}, PIN ${customer.pincode}\n\nPlease confirm availability and payment details.`;
+      window.open(`https://wa.me/919063266307?text=${encodeURIComponent(message)}`,'_blank','noopener,noreferrer');
 
-    setCart([]); setCheckout(false);
-    setNotice(`Order ${ref} prepared in WhatsApp`);
+      /* Save order to local history */
+      const record:OrderRecord={
+        ref,items:cart.map(l=>({name:l.product.name,qty:l.qty,price:l.product.price})),
+        subtotal:subtotalAmt,shipping:shippingAmt,total,
+        status:"pending",customerName:customer.name,customerPhone:customer.phone,
+        address:customer.address,pincode:customer.pincode,date:new Date().toISOString(),
+      };
+      const allOrders=[record,...orders];
+      setOrders(allOrders);
+      saveJSON("zavelia-orders",allOrders);
+      if(user)saveJSON(`zavelia-orders-${user.email}`,allOrders);
+
+      setCart([]);setCheckout(false);
+      setNotice(`Order ${ref} placed! Check WhatsApp for confirmation.`);
+    }catch{
+      setNotice("Network error. Please try again.");
+    }
+    setOrderProcessing(false);
   };
 
   /* ── customer auth ── */
@@ -218,7 +219,7 @@ export default function Home() {
     <header className="header">
       <button className="icon mobile" aria-label="Open menu" onClick={() => setMenu(true)}>☰</button>
       <a className="logo" href="/">ZAVÉLIA<span>adorn your every mood</span></a>
-      <nav aria-label="Main navigation">{['New In','Jewellery','Beauty','Accessories','Gifting'].map(x => <a href="#new-in" key={x}>{x}</a>)}<a className="sale" href="#edit">The Edit</a></nav>
+      <nav aria-label="Main navigation">{[{name:'New In',href:'#new-in'},{name:'Jewellery',href:'/category/Jewellery'},{name:'Beauty',href:'/category/Beauty'},{name:'Accessories',href:'/category/Accessories'},{name:'Gifting',href:'/category/gifting'}].map(x => <a href={x.href} key={x.name}>{x.name}</a>)}<a className="sale" href="#edit">The Edit</a></nav>
       <div className="actions">
         <button className="icon" aria-label="Search" onClick={() => setSearch(true)}>⌕</button>
         <button className="icon" aria-label={`Wishlist with ${saved.length} items`} onClick={()=>setWishlistOpen(true)}>♡</button>
@@ -238,7 +239,7 @@ export default function Home() {
         </div>
         <nav className="mobile-sidebar-nav">
           <p className="mobile-nav-label">EXPLORE</p>
-          {['New In','Jewellery','Beauty','Accessories','Gifting'].map(x => <a href="#new-in" onClick={()=>{setMenu(false);if(x!=='New In'&&x!=='Gifting')setActiveCategory(x)}} key={x}>{x}</a>)}
+          {['New In','Jewellery','Beauty','Accessories','Gifting'].map(x => <a href={x==='New In'?'#new-in':x==='Gifting'?'/category/gifting':`/category/${x}`} onClick={()=>{setMenu(false);if(x!=='New In'&&x!=='Gifting')setActiveCategory(x)}} key={x}>{x}</a>)}
           <p className="mobile-nav-label" style={{marginTop:24}}>ACCOUNT</p>
           <a href="#" onClick={(e)=>{e.preventDefault();setMenu(false);user?setHistoryOpen(true):setAuthOpen(true)}}>{user?`Hi, ${user.name}`:'Sign In / Register'}</a>
           {user&&<a href="#" onClick={(e)=>{e.preventDefault();setMenu(false);setHistoryOpen(true)}}>My Orders</a>}
@@ -357,14 +358,14 @@ export default function Home() {
       <label>PIN code<input required inputMode="numeric" pattern="[0-9]{6}" value={customer.pincode} onChange={e=>setCustomer({...customer,pincode:e.target.value.replace(/\D/g,'').slice(0,6)})} placeholder="6-digit PIN code"/></label>
       <label className="consent"><input type="checkbox" required/> I agree to share these details with ZAVÉLIA through WhatsApp to process this order.</label>
       <div className="order-total">Order total <b>₹{(subtotal+shipping).toLocaleString('en-IN')}</b></div>
-      <button className="checkout-btn" type="submit">OPEN WHATSAPP TO PLACE ORDER →</button>
+      <button className="checkout-btn" type="submit" disabled={orderProcessing}>{orderProcessing?"PLACING ORDER...":"OPEN WHATSAPP TO PLACE ORDER →"}</button>
       <small className="safe-note">WhatsApp will open to +91 90632 66307. Opening WhatsApp does not reserve stock or confirm your order.</small>
     </form></div>}
 
     {/* ── Hero ── */}
     <section className="hero" id="content"><img src="https://images.unsplash.com/photo-1611652022419-a9419f74343d?auto=format&fit=crop&w=1800&q=90" alt="Gold jewellery styled on warm sculptural fabric"/><div className="hero-shade"/><div className="hero-copy"><p className="eyebrow">THE FESTIVE EDIT · 2026</p><h1>Your mood.<br/><em>Your moment.</em></h1><p>Jewellery, beauty and accessories curated for every version of you.</p><a className="button light" href="#new-in">SHOP THE EDIT <span>→</span></a></div><div className="hero-index"><span>01</span><i/><span>04</span></div></section>
     <section className="intro"><p className="eyebrow">A WORLD OF SELF-EXPRESSION</p><h2>Not just what you wear.<br/><em>How you feel wearing it.</em></h2><p className="intro-copy">ZAVÉLIA brings together thoughtful details, expressive colour and modern rituals—chosen to make getting ready the best part of your day.</p></section>
-    <section className="categories" aria-label="Shop categories">{categories.map((c,i) => <a href="#new-in" className={`category c${i}`} key={c.name}><img src={c.image} alt={`${c.name} collection`}/><div><span>{c.note}</span><h3>{c.name}</h3><b>EXPLORE →</b></div></a>)}</section>
+    <section className="categories" aria-label="Shop categories">{categories.map((c,i) => <a href={`/category/${c.name}`} className={`category c${i}`} key={c.name}><img src={c.image} alt={`${c.name} collection`}/><div><span>{c.note}</span><h3>{c.name}</h3><b>EXPLORE →</b></div></a>)}</section>
 
     {/* ── Products ── */}
     <section className="new" id="new-in">
@@ -373,21 +374,23 @@ export default function Home() {
       <div className="product-grid">{filteredByCategory.map(p => {
         const qty = quantities[p.id] ?? 1;
         return <article className="product" key={p.id}>
+          <a href={`/product/${p.slug}`} className="product-image-link">
           <div className="product-image">
             <img src={p.image} alt={p.name}/>
             <span>{p.stock>0?p.tag:"SOLD OUT"}</span>
-            <button className={saved.includes(String(p.id)) ? 'active' : ''} onClick={() => toggleSaved(p.id)} aria-label={`Save ${p.name}`}>♡</button>
+            <button className={saved.includes(String(p.id)) ? 'active' : ''} onClick={(e)=>{e.preventDefault();toggleSaved(p.id)}} aria-label={`Save ${p.name}`}>♡</button>
             {p.stock > 0 ? <div className="qty-add-bar">
               <div className="qty-selector">
-                <button aria-label="Decrease quantity" onClick={()=>setQuantities(q=>({...q,[p.id]:Math.max(1,(q[p.id]??1)-1)}))}>−</button>
+                <button aria-label="Decrease quantity" onClick={(e)=>{e.preventDefault();e.stopPropagation();setQuantities(q=>({...q,[p.id]:Math.max(1,(q[p.id]??1)-1)}))}}>−</button>
                 <span>{qty}</span>
-                <button aria-label="Increase quantity" onClick={()=>setQuantities(q=>({...q,[p.id]:Math.min(p.stock,(q[p.id]??1)+1)}))}>+</button>
+                <button aria-label="Increase quantity" onClick={(e)=>{e.preventDefault();e.stopPropagation();setQuantities(q=>({...q,[p.id]:Math.min(p.stock,(q[p.id]??1)+1)}))}}>+</button>
               </div>
-              <button className="add-btn" onClick={() => addToCart(p, qty)}>ADD TO BAG</button>
+              <button className="add-btn" onClick={(e) => {e.preventDefault();e.stopPropagation();addToCart(p, qty)}}>ADD TO BAG</button>
             </div> : <button className="quick sold-out-btn" disabled>SOLD OUT</button>}
           </div>
-          <p>{p.category}</p><h3>{p.name}</h3>
-          <div className="price">₹{p.price.toLocaleString('en-IN')} {p.discount&&p.discount>0?<span className="storefront-discount">{p.discount}% OFF</span>:null} {p.compareAtPrice&&p.compareAtPrice>p.price?<del>₹{p.compareAtPrice.toLocaleString('en-IN')}</del>:null}</div>
+          </a>
+          <a href={`/product/${p.slug}`} style={{textDecoration:'none',color:'inherit'}}><p>{p.category}</p><h3>{p.name}</h3>
+          <div className="price">₹{p.price.toLocaleString('en-IN')} {p.discount&&p.discount>0?<span className="storefront-discount">{p.discount}% OFF</span>:null} {p.compareAtPrice&&p.compareAtPrice>p.price?<del>₹{p.compareAtPrice.toLocaleString('en-IN')}</del>:null}</div></a>
         </article>;
       })}</div>
     </section>
@@ -397,7 +400,7 @@ export default function Home() {
     <section className="newsletter"><p className="eyebrow">NOTES FROM ZAVÉLIA</p><h2>A little beauty in your inbox.</h2><p>New edits, styling stories and private previews—never noise.</p><form onSubmit={e => {e.preventDefault(); setNotice("You\u2019re on the list \u2014 welcome to ZAV\u00c9LIA.")}}><label className="sr-only" htmlFor="email">Email address</label><input id="email" type="email" required placeholder="Your email address"/><button>JOIN THE LIST →</button></form><small>By subscribing, you agree to receive ZAVÉLIA updates. Unsubscribe anytime.</small></section>
 
     {/* ── Footer ── */}
-    <footer><div className="footer-brand"><a className="logo" href="#">ZAVÉLIA<span>adorn your every mood</span></a><p>A curated destination for jewellery, beauty and accessories that celebrate every version of you.</p></div><div><h3>SHOP</h3><a href="#new-in">New In</a><a href="#new-in">Jewellery</a><a href="#new-in">Beauty</a><a href="#new-in">Accessories</a><a href="#new-in">Gifting</a></div><div><h3>HELP</h3><a href="mailto:adityavardhan394@gmail.com">Contact us</a><a href="/shipping">Shipping</a><a href="/returns">Returns</a><a href="https://wa.me/919063266307" target="_blank" rel="noreferrer">Order support</a><a href="#faq" onClick={e=>{e.preventDefault();document.querySelector('.promise')?.scrollIntoView({behavior:'smooth'})}}>FAQs</a></div><div><h3>ABOUT</h3><a href="#edit">Our story</a><a href="/returns">Care guide</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div><div className="footer-note"><h3>WE'RE HERE TO HELP</h3><a href="https://wa.me/919063266307" target="_blank" rel="noreferrer">WhatsApp: +91 90632 66307</a><a href="mailto:adityavardhan394@gmail.com">adityavardhan394@gmail.com</a><p>Orders are confirmed through WhatsApp after availability review.</p></div></footer>
+    <footer><div className="footer-brand"><a className="logo" href="#">ZAVÉLIA<span>adorn your every mood</span></a><p>A curated destination for jewellery, beauty and accessories that celebrate every version of you.</p></div><div><h3>SHOP</h3><a href="#new-in">New In</a><a href="/category/Jewellery">Jewellery</a><a href="/category/Beauty">Beauty</a><a href="/category/Accessories">Accessories</a><a href="/category/gifting">Gifting</a></div><div><h3>HELP</h3><a href="mailto:adityavardhan394@gmail.com">Contact us</a><a href="/shipping">Shipping</a><a href="/returns">Returns</a><a href={`https://wa.me/919063266307`} target="_blank" rel="noreferrer">Order support</a><a href="#faq" onClick={e=>{e.preventDefault();document.querySelector('.promise')?.scrollIntoView({behavior:'smooth'})}}>FAQs</a></div><div><h3>ABOUT</h3><a href="#edit">Our story</a><a href="/returns">Care guide</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div><div className="footer-note"><h3>WE'RE HERE TO HELP</h3><a href={`https://wa.me/919063266307`} target="_blank" rel="noreferrer">WhatsApp: +91 90632 66307</a><a href="mailto:adityavardhan394@gmail.com">adityavardhan394@gmail.com</a><p>Orders are confirmed through WhatsApp after availability review.</p></div></footer>
     <div className="copyright">© 2026 ZAVÉLIA. ALL RIGHTS RESERVED. <span>MADE WITH INTENTION.</span></div>
     {notice && <div className="toast" role="status">✓ {notice}</div>}
   </main>;

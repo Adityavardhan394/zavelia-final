@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ZAVÉLIA — Jewellery, Beauty & Accessories",
+  title: "ZAVÉLIA | Jewellery, Beauty & Accessories",
   description:
     "Curated jewellery, beauty and fashion accessories for every version of you. Shop everyday glow, ritual beauty and statement accessories.",
   keywords: [
@@ -31,14 +31,14 @@ export const metadata: Metadata = {
   creator: "ZAVÉLIA",
   publisher: "ZAVÉLIA",
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL || "https://zavelia.com",
+    process.env.NEXT_PUBLIC_SITE_URL || "https://zavelia.in",
   ),
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     locale: "en_IN",
     siteName: "ZAVÉLIA",
-    title: "ZAVÉLIA — Jewellery, Beauty & Accessories",
+    title: "ZAVÉLIA | Jewellery, Beauty & Accessories",
     description:
       "Curated jewellery, beauty and fashion accessories for every version of you.",
     images: [
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "ZAVÉLIA — Jewellery, Beauty & Accessories",
+    title: "ZAVÉLIA | Jewellery, Beauty & Accessories",
     description:
       "Curated jewellery, beauty and fashion accessories for every version of you.",
     images: ["/og-image.png"],

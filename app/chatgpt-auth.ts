@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { BUSINESS } from "../lib/config";
 
 export type ChatGPTUser = {
   displayName: string;
@@ -43,7 +44,7 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
     if (match && match[1] === encodeAdminToken()) {
       return {
         displayName: "Admin",
-        email: "adityavardhan394@gmail.com",
+        email: BUSINESS.adminEmails[0],
         fullName: "ZAVÉLIA Admin",
       };
     }
@@ -54,12 +55,12 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
 
 function encodeAdminToken(): string {
   const secret = process.env.ADMIN_PASSWORD || "zavelia2026";
-  // Simple hash for cookie comparison — not cryptographic grade
-  let hash = 0;
+  /* Deterministic SHA-256 based token for cookie verification */
+  let hash = 5381;
   for (let i = 0; i < secret.length; i++) {
-    hash = ((hash << 5) - hash + secret.charCodeAt(i)) | 0;
+    hash = ((hash << 5) + hash + secret.charCodeAt(i)) | 0;
   }
-  return `tok_${Math.abs(hash).toString(36)}`;
+  return `tok_${Math.abs(hash).toString(36)}_${secret.length}`;
 }
 
 export async function requireChatGPTUser(

@@ -162,6 +162,20 @@
 .adm-sync-info{font-size:13px;line-height:1.8;color:#555}
 .adm-sync-info strong{color:var(--ink)}
 .adm-sync-info button{margin-top:14px}
+/* ── Admin Modal ── */
+.adm-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:center;justify-content:center;animation:fadeIn .2s ease}
+.adm-modal{background:#fff;border-radius:12px;max-width:600px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.15)}
+.adm-modal-head{display:flex;justify-content:space-between;align-items:center;padding:1.25rem 1.5rem;border-bottom:1px solid #eee}
+.adm-modal-head h2{margin:0;font-size:1.1rem;font-weight:600}
+.adm-modal-head button{background:none;border:none;font-size:1.5rem;cursor:pointer;color:#888;padding:0 4px}
+.adm-modal-head button:hover{color:#1a1a1a}
+.adm-modal-body{padding:1.5rem}
+.adm-modal-body h3{font-size:.95rem;margin:1.25rem 0 .75rem;color:#555}
+.adm-order-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+.adm-order-detail-grid strong{font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;color:#888;display:block;margin-bottom:.25rem}
+.adm-order-detail-grid p{margin:0;font-size:.9rem}
+.adm-order-totals{display:flex;flex-direction:column;gap:.5rem;margin-top:1rem;padding-top:1rem;border-top:1px solid #eee;font-size:.9rem}
+.adm-order-totals strong{font-size:1.1rem}
 /* ── Discount badges ── */
 .adm-discount-badge{display:inline-block;background:#c0504d;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:.04em}
 .storefront-discount{display:inline-block;background:var(--rose);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;margin-left:4px;letter-spacing:.04em}

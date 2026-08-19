@@ -6,44 +6,34 @@ export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setLoading(true);
 
-    // The admin page checks for specific emails
-    const allowedEmails = ["padbhog@gmail.com", "adityavardhan394@gmail.com"];
-    if (!allowedEmails.includes(email.toLowerCase())) {
-      setError("Access denied. This email is not authorized.");
-      return;
+    try {
+      const r = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const d = await r.json();
+
+      if (!r.ok) {
+        setError(d.error || "Login failed.");
+        setLoading(false);
+        return;
+      }
+
+      /* Server sets HttpOnly cookie; redirect to admin dashboard */
+      router.push("/admin");
+    } catch {
+      setError("Network error. Please try again.");
+      setLoading(false);
     }
-
-    // Default password matches the one in chatgpt-auth.ts
-    const expectedPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "zavelia2026";
-    if (password !== expectedPassword) {
-      setError("Invalid password.");
-      return;
-    }
-
-    // Compute the same token as encodeAdminToken() in chatgpt-auth.ts
-    const secret = expectedPassword;
-    let hash = 0;
-    for (let i = 0; i < secret.length; i++) {
-      hash = ((hash << 5) - hash + secret.charCodeAt(i)) | 0;
-    }
-    const token = `tok_${Math.abs(hash).toString(36)}`;
-
-    // Set the admin cookie (same params as API route for consistency)
-    document.cookie = `zavelia_admin=${token}; path=/; max-age=${60*60*24*30}; SameSite=Lax`;
-
-    // Also call the API login to ensure server-side cookie is set
-    try{
-      await fetch("/api/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password})});
-    }catch{}
-
-    // Redirect to admin dashboard
-    router.push("/admin");
   };
 
   return (
@@ -85,8 +75,8 @@ export default function AdminLoginPage() {
 
           {error && <p className="admin-login-error">{error}</p>}
 
-          <button type="submit" className="admin-login-btn">
-            SIGN IN
+          <button type="submit" className="admin-login-btn" disabled={loading}>
+            {loading ? "SIGNING IN..." : "SIGN IN"}
           </button>
 
           <a href="/" className="admin-login-back">
@@ -194,6 +184,10 @@ export default function AdminLoginPage() {
         }
         .admin-login-btn:hover {
           background: #333;
+        }
+        .admin-login-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
         .admin-login-back {
           text-align: center;
