@@ -6,9 +6,9 @@ import * as schema from "./schema";
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null;
 let tablesReady = false;
 
-/* PostgreSQL CREATE TABLE statements — run once on fresh databases */
-const CREATE_TABLES_SQL = `
-  CREATE TABLE IF NOT EXISTS products (
+/* Each CREATE TABLE as a separate statement — Neon HTTP driver requires individual execution */
+const CREATE_TABLES = [
+  `CREATE TABLE IF NOT EXISTS products (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
@@ -25,18 +25,16 @@ const CREATE_TABLES_SQL = `
     featured BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-
-  CREATE TABLE IF NOT EXISTS customers (
+  )`,
+  `CREATE TABLE IF NOT EXISTS customers (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
     phone TEXT NOT NULL,
     password_hash TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-
-  CREATE TABLE IF NOT EXISTS orders (
+  )`,
+  `CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
     customer_id INTEGER REFERENCES customers(id),
     ref TEXT NOT NULL UNIQUE,
@@ -50,9 +48,8 @@ const CREATE_TABLES_SQL = `
     address TEXT NOT NULL,
     pincode TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-
-  CREATE TABLE IF NOT EXISTS admin_users (
+  )`,
+  `CREATE TABLE IF NOT EXISTS admin_users (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
@@ -61,8 +58,8 @@ const CREATE_TABLES_SQL = `
     modules TEXT NOT NULL DEFAULT '[]',
     active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-`;
+  )`,
+];
 
 export async function getDb() {
   if (db && tablesReady) return db;
@@ -79,11 +76,13 @@ export async function getDb() {
     db = drizzle(sql_client, { schema });
 
     if (!tablesReady) {
-      /* Initialize tables on fresh database */
-      try {
-        await db.execute(sql.raw(CREATE_TABLES_SQL));
-      } catch (e) {
-        console.error("[DB] Table initialization error:", e);
+      /* Initialize tables one-by-one (Neon HTTP driver does not support multi-statement queries) */
+      for (const stmt of CREATE_TABLES) {
+        try {
+          await db.execute(sql.raw(stmt));
+        } catch (e) {
+          console.error("[DB] Table creation error:", e);
+        }
       }
       tablesReady = true;
     }
