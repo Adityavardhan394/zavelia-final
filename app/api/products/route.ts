@@ -14,6 +14,7 @@ const seed = [
 export async function GET() {
   try {
     const db=await getDb();
+    if(!db)return Response.json({products:seed,fallback:true});
     let rows=await db.select().from(products).where(eq(products.published,true)).orderBy(asc(products.id));
     if(rows.length===0){await db.insert(products).values(seed).onConflictDoNothing();rows=await db.select().from(products).where(eq(products.published,true)).orderBy(asc(products.id));}
     return Response.json({products:rows},{headers:{"Cache-Control":"public, max-age=30, stale-while-revalidate=120"}});

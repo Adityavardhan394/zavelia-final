@@ -1,0 +1,16 @@
+{
+  "name": "ZAVÉLIA",
+  "short_name": "ZAVÉLIA",
+  "description": "Curated jewellery, beauty and fashion accessories.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#faf8f3",
+  "theme_color": "#1d211d",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

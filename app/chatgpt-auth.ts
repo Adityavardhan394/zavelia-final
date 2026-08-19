@@ -19,20 +19,47 @@ const CALLBACK_PATH = "/callback";
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
   const requestHeaders = await headers();
   const email = requestHeaders.get(USER_EMAIL_HEADER);
-  if (!email) return null;
 
-  const encodedFullName = requestHeaders.get(USER_FULL_NAME_HEADER);
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get(USER_FULL_NAME_ENCODING_HEADER) === PERCENT_ENCODED_UTF8
-      ? safeDecodeURIComponent(encodedFullName)
-      : null;
+  // ChatGPT environment: use injected auth headers
+  if (email) {
+    const encodedFullName = requestHeaders.get(USER_FULL_NAME_HEADER);
+    const fullName =
+      encodedFullName &&
+      requestHeaders.get(USER_FULL_NAME_ENCODING_HEADER) === PERCENT_ENCODED_UTF8
+        ? safeDecodeURIComponent(encodedFullName)
+        : null;
 
-  return {
-    displayName: fullName ?? email,
-    email,
-    fullName,
-  };
+    return {
+      displayName: fullName ?? email,
+      email,
+      fullName,
+    };
+  }
+
+  // Fallback: cookie-based admin session (set via /admin/login)
+  const cookie = requestHeaders.get("cookie");
+  if (cookie) {
+    const match = cookie.match(/zavelia_admin=([^;]+)/);
+    if (match && match[1] === encodeAdminToken()) {
+      return {
+        displayName: "Admin",
+        email: "adityavardhan394@gmail.com",
+        fullName: "ZAVÉLIA Admin",
+      };
+    }
+  }
+
+  return null;
+}
+
+function encodeAdminToken(): string {
+  const secret = process.env.ADMIN_PASSWORD || "zavelia2026";
+  // Simple hash for cookie comparison — not cryptographic grade
+  let hash = 0;
+  for (let i = 0; i < secret.length; i++) {
+    hash = ((hash << 5) - hash + secret.charCodeAt(i)) | 0;
+  }
+  return `tok_${Math.abs(hash).toString(36)}`;
 }
 
 export async function requireChatGPTUser(

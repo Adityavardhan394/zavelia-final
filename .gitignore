@@ -40,3 +40,20 @@ next-env.d.ts
 /.sites-runtime/
 /outputs/
 /work/
+
+# build artifacts
+/.vinext/
+/build/*.js
+/build/*.d.ts
+
+# environment
+.env
+.env.local
+.env.production
+
+# local database
+local-dev.db
+
+# IDE / tool caches
+.qoder/
+.openai/

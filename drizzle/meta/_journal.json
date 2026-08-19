@@ -8,6 +8,20 @@
       "when": 1786681514238,
       "tag": "0000_slim_mystique",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1786962900000,
+      "tag": "0001_add_customers_orders",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786963200000,
+      "tag": "0002_add_admin_users",
+      "breakpoints": true
     }
   ]
 }
