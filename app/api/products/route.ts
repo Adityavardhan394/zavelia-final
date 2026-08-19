@@ -9,7 +9,6 @@ export async function GET(request: Request) {
 
   try {
     const db = await getDb();
-    if (!db) return Response.json({ products: [] });
 
     let rows;
     if (slug) {
@@ -22,7 +21,8 @@ export async function GET(request: Request) {
       rows = await db.select().from(products).where(eq(products.published, true)).orderBy(asc(products.id));
     }
     return Response.json({ products: rows }, { headers: { "Cache-Control": "public, max-age=30, stale-while-revalidate=120" } });
-  } catch {
-    return Response.json({ products: [] });
+  } catch (error) {
+    console.error("[API] Products GET failed:", error);
+    return Response.json({ error: "Failed to load products. Please try again." }, { status: 500 });
   }
 }

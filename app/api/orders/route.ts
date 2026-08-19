@@ -24,9 +24,6 @@ export async function POST(request: Request) {
 
   try {
     const db = await getDb();
-    if (!db) {
-      return Response.json({ error: "Database not available" }, { status: 503 });
-    }
 
     /* Look up actual prices from DB for each product */
     const productIds = items.map(i => i.productId);
@@ -103,8 +100,8 @@ export async function POST(request: Request) {
 
     return Response.json({ order, ok: true }, { status: 201 });
   } catch (error) {
-    console.error("Order placement error:", error);
-    return Response.json({ error: "Failed to place order" }, { status: 500 });
+    console.error("[API] Order placement failed:", error);
+    return Response.json({ error: "Failed to place order. Please try again." }, { status: 500 });
   }
 }
 
@@ -115,9 +112,6 @@ export async function GET(request: Request) {
 
   try {
     const db = await getDb();
-    if (!db) {
-      return Response.json({ orders: [] });
-    }
 
     if (email) {
       /* Get orders for a specific customer */
@@ -130,7 +124,8 @@ export async function GET(request: Request) {
     /* Return all orders */
     const rows = await db.select().from(orders);
     return Response.json({ orders: rows });
-  } catch {
-    return Response.json({ orders: [] });
+  } catch (error) {
+    console.error("[API] Orders GET failed:", error);
+    return Response.json({ error: "Failed to load orders." }, { status: 500 });
   }
 }

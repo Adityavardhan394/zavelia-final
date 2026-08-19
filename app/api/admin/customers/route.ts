@@ -13,10 +13,10 @@ export async function GET() {
   if (!await authorized()) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const db = await getDb();
-    if (!db) return Response.json({ customers: [] });
     const rows = await db.select().from(customers).orderBy(desc(customers.id));
     return Response.json({ customers: rows });
-  } catch {
-    return Response.json({ customers: [] });
+  } catch (error) {
+    console.error("[API] Admin customers GET failed:", error);
+    return Response.json({ error: "Database connection failed. Please contact the administrator." }, { status: 503 });
   }
 }

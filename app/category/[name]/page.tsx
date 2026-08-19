@@ -32,18 +32,20 @@ export default async function CategoryPage({ params }: Props) {
     notFound();
   }
 
-  const db = await getDb();
-  if (!db) notFound();
-
-  let rows;
-  if (category.toLowerCase() === "gifting") {
-    /* Gifting shows featured products */
-    rows = await db.select().from(products).where(eq(products.published, true)).orderBy(asc(products.id));
-    rows = rows.filter(p => p.featured);
-  } else {
-    /* Match category case-insensitively */
-    const allProducts = await db.select().from(products).where(eq(products.published, true)).orderBy(asc(products.id));
-    rows = allProducts.filter(p => p.category.toLowerCase() === category.toLowerCase());
+  let rows: any[] = [];
+  try {
+    const db = await getDb();
+    if (category.toLowerCase() === "gifting") {
+      /* Gifting shows featured products */
+      const featured = await db.select().from(products).where(eq(products.published, true)).orderBy(asc(products.id));
+      rows = featured.filter(p => p.featured);
+    } else {
+      /* Match category case-insensitively */
+      const allProducts = await db.select().from(products).where(eq(products.published, true)).orderBy(asc(products.id));
+      rows = allProducts.filter(p => p.category.toLowerCase() === category.toLowerCase());
+    }
+  } catch (error) {
+    console.error("[Category] Page fetch failed:", error);
   }
 
   const fmt = (n: number) => `₹${n.toLocaleString("en-IN")}`;

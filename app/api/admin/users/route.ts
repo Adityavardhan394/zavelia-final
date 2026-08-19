@@ -13,11 +13,11 @@ export async function GET() {
   if (!await authorized()) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const db = await getDb();
-    if (!db) return Response.json({ users: [] });
     const rows = await db.select().from(adminUsers).orderBy(asc(adminUsers.id));
     return Response.json({ users: rows });
-  } catch {
-    return Response.json({ users: [] });
+  } catch (error) {
+    console.error("[API] Admin users GET failed:", error);
+    return Response.json({ error: "Database connection failed. Please contact the administrator." }, { status: 503 });
   }
 }
 
@@ -36,12 +36,12 @@ export async function POST(request: Request) {
 
   try {
     const db = await getDb();
-    if (!db) return Response.json({ error: "Database not available" }, { status: 503 });
     const [user] = await db.insert(adminUsers).values({
       name, email, password, role: role as "super_admin" | "manager" | "staff", modules, active: true,
     }).returning();
     return Response.json({ user: { ...user, password: undefined } }, { status: 201 });
-  } catch {
-    return Response.json({ error: "Email already exists or insert failed" }, { status: 409 });
+  } catch (error) {
+    console.error("[API] Admin user POST failed:", error);
+    return Response.json({ error: "Email already exists or insert failed." }, { status: 409 });
   }
 }

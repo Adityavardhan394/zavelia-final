@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb } from "../../../../../db";
 import { adminUsers } from "../../../../../db/schema";
 import { getChatGPTUser } from "../../../../chatgpt-auth";
@@ -18,11 +18,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (typeof body.password === "string" && body.password.length >= 6) update.password = body.password;
   try {
     const db = await getDb();
-    if (!db) return Response.json({ error: "Database not available" }, { status: 503 });
     const [user] = await db.update(adminUsers).set(update).where(eq(adminUsers.id, Number(id))).returning();
     return Response.json({ user: { ...user, password: undefined } });
-  } catch {
-    return Response.json({ error: "Update failed" }, { status: 500 });
+  } catch (error) {
+    console.error("[API] Admin user PATCH failed:", error);
+    return Response.json({ error: "Update failed." }, { status: 500 });
   }
 }
 
@@ -31,10 +31,10 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   try {
     const db = await getDb();
-    if (!db) return Response.json({ error: "Database not available" }, { status: 503 });
     await db.delete(adminUsers).where(eq(adminUsers.id, Number(id)));
     return Response.json({ ok: true });
-  } catch {
-    return Response.json({ error: "Delete failed" }, { status: 500 });
+  } catch (error) {
+    console.error("[API] Admin user DELETE failed:", error);
+    return Response.json({ error: "Delete failed." }, { status: 500 });
   }
 }

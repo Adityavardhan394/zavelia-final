@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
 import { getDb } from "../../../db";
 import { products } from "../../../db/schema";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, type InferSelectModel } from "drizzle-orm";
 import { BUSINESS } from "../../../lib/config";
 import Link from "next/link";
+
+type Product = InferSelectModel<typeof products>;
 
 export const dynamic = "force-dynamic";
 
@@ -13,10 +15,14 @@ interface Props {
 
 export async function generateMetadata({ params }: Props) {
   const { slug } = await params;
-  const db = await getDb();
-  if (!db) return { title: "Product Not Found" };
-  const rows = await db.select().from(products).where(eq(products.slug, slug)).limit(1);
-  const product = rows[0];
+  let product;
+  try {
+    const db = await getDb();
+    const rows = await db.select().from(products).where(eq(products.slug, slug)).limit(1);
+    product = rows[0];
+  } catch (error) {
+    console.error("[Product] Metadata fetch failed:", error);
+  }
   if (!product) return { title: "Product Not Found" };
   return {
     title: `${product.name} | ${BUSINESS.name}`,
@@ -31,18 +37,23 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function ProductPage({ params }: Props) {
   const { slug } = await params;
-  const db = await getDb();
-  if (!db) notFound();
-
-  const rows = await db.select().from(products).where(eq(products.slug, slug)).limit(1);
-  const product = rows[0];
+  let product: Product | undefined;
+  let relatedProducts: Product[] = [];
+  try {
+    const db = await getDb();
+    const rows = await db.select().from(products).where(eq(products.slug, slug)).limit(1);
+    product = rows[0];
+    if (product && product.published) {
+      /* Fetch related products from same category */
+      const related = await db.select().from(products)
+        .where(eq(products.category, product.category))
+        .orderBy(asc(products.id));
+      relatedProducts = related.filter(p => p.id !== product!.id && p.published).slice(0, 4);
+    }
+  } catch (error) {
+    console.error("[Product] Page fetch failed:", error);
+  }
   if (!product || !product.published) notFound();
-
-  /* Fetch related products from same category */
-  const related = await db.select().from(products)
-    .where(eq(products.category, product.category))
-    .orderBy(asc(products.id));
-  const relatedProducts = related.filter(p => p.id !== product.id && p.published).slice(0, 4);
 
   const fmt = (n: number) => `₹${n.toLocaleString("en-IN")}`;
   const discountPrice = product.discount && product.discount > 0

@@ -25,11 +25,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (typeof body.discount === "number") update.discount = body.discount;
   try {
     const db = await getDb();
-    if (!db) return Response.json({ error: "Database not available" }, { status: 503 });
     const [product] = await db.update(products).set(update).where(eq(products.id, Number(id))).returning();
     return Response.json({ product });
-  } catch {
-    return Response.json({ error: "Failed to update product" }, { status: 500 });
+  } catch (error) {
+    console.error("[API] Admin product PATCH failed:", error);
+    return Response.json({ error: "Failed to update product." }, { status: 500 });
   }
 }
 
@@ -38,10 +38,10 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   try {
     const db = await getDb();
-    if (!db) return Response.json({ error: "Database not available" }, { status: 503 });
     await db.delete(products).where(eq(products.id, Number(id)));
     return Response.json({ ok: true });
-  } catch {
-    return Response.json({ error: "Failed to delete product" }, { status: 500 });
+  } catch (error) {
+    console.error("[API] Admin product DELETE failed:", error);
+    return Response.json({ error: "Failed to delete product." }, { status: 500 });
   }
 }

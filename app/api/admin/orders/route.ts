@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { orders } from "../../../../db/schema";
 import { getChatGPTUser } from "../../../chatgpt-auth";
-import { ORDER_STATUSES, isOrderStatus, type OrderStatus } from "../../../../lib/config";
+import { ORDER_STATUSES, isOrderStatus } from "../../../../lib/config";
 
 const admins = new Set(["padbhog@gmail.com", "adityavardhan394@gmail.com"]);
 async function authorized() {
@@ -14,12 +14,11 @@ export async function GET() {
   if (!await authorized()) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const db = await getDb();
-    if (!db) return Response.json({ orders: [], fallback: true });
     const rows = await db.select().from(orders).orderBy(desc(orders.id));
     return Response.json({ orders: rows });
-  } catch (e) {
-    console.error("Admin orders GET error:", e);
-    return Response.json({ orders: [], fallback: true });
+  } catch (error) {
+    console.error("[API] Admin orders GET failed:", error);
+    return Response.json({ error: "Database connection failed. Please contact the administrator." }, { status: 503 });
   }
 }
 
@@ -43,9 +42,8 @@ export async function PATCH(request: Request) {
 
   try {
     const db = await getDb();
-    if (!db) return Response.json({ error: "Database not available" }, { status: 503 });
 
-    /* Match by ref (from localStorage orders) or by id (from DB orders) */
+    /* Match by ref or by id */
     const condition = body.ref
       ? eq(orders.ref, body.ref)
       : eq(orders.id, body.id as number);
@@ -58,8 +56,8 @@ export async function PATCH(request: Request) {
 
     if (!updated) return Response.json({ error: "Order not found" }, { status: 404 });
     return Response.json({ order: updated });
-  } catch (e) {
-    console.error("Admin orders PATCH error:", e);
-    return Response.json({ error: "Failed to update order" }, { status: 500 });
+  } catch (error) {
+    console.error("[API] Admin orders PATCH failed:", error);
+    return Response.json({ error: "Failed to update order." }, { status: 500 });
   }
 }

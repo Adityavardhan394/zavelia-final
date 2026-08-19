@@ -1,11 +1,10 @@
-import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { pgTable, serial, text, integer, boolean, timestamp } from "drizzle-orm/pg-core";
 
-export const products = sqliteTable("products", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const products = pgTable("products", {
+  id: serial("id").primaryKey(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
-  category: text("category", { enum: ["Jewellery", "Beauty", "Accessories"] }).notNull(),
+  category: text("category").notNull(),
   description: text("description").notNull(),
   price: integer("price").notNull(),
   compareAtPrice: integer("compare_at_price"),
@@ -14,44 +13,44 @@ export const products = sqliteTable("products", {
   tag: text("tag").notNull().default("NEW"),
   stock: integer("stock").notNull().default(0),
   lowStockThreshold: integer("low_stock_threshold").notNull().default(5),
-  published: integer("published", { mode: "boolean" }).notNull().default(false),
-  featured: integer("featured", { mode: "boolean" }).notNull().default(false),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  published: boolean("published").notNull().default(false),
+  featured: boolean("featured").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const customers = sqliteTable("customers", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const customers = pgTable("customers", {
+  id: serial("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   phone: text("phone").notNull(),
   passwordHash: text("password_hash").notNull(),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const orders = sqliteTable("orders", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const orders = pgTable("orders", {
+  id: serial("id").primaryKey(),
   customerId: integer("customer_id").references(() => customers.id),
   ref: text("ref").notNull().unique(),
   items: text("items").notNull(), // JSON string
   subtotal: integer("subtotal").notNull(),
   shipping: integer("shipping").notNull(),
   total: integer("total").notNull(),
-  status: text("status", { enum: ["pending", "confirmed", "packed", "shipped", "delivered", "cancelled"] }).notNull().default("pending"),
+  status: text("status").notNull().default("pending"),
   customerName: text("customer_name").notNull(),
   customerPhone: text("customer_phone").notNull(),
   address: text("address").notNull(),
   pincode: text("pincode").notNull(),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const adminUsers = sqliteTable("admin_users", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const adminUsers = pgTable("admin_users", {
+  id: serial("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
-  role: text("role", { enum: ["super_admin", "manager", "staff"] }).notNull().default("staff"),
+  role: text("role").notNull().default("staff"),
   modules: text("modules").notNull().default("[]"),
-  active: integer("active", { mode: "boolean" }).notNull().default(true),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });

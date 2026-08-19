@@ -12,11 +12,11 @@ export async function GET() {
   if (!await authorized()) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const db = await getDb();
-    if (!db) return Response.json({ products: [] });
     const rows = await db.select().from(products).orderBy(asc(products.id));
     return Response.json({ products: rows });
-  } catch {
-    return Response.json({ products: [] });
+  } catch (error) {
+    console.error("[API] Admin products GET failed:", error);
+    return Response.json({ error: "Database connection failed. Please contact the administrator." }, { status: 503 });
   }
 }
 
@@ -35,10 +35,10 @@ export async function POST(request: Request) {
   const discount = body.discount ? Number(body.discount) : 0;
   try {
     const db = await getDb();
-    if (!db) return Response.json({ error: "Database not available" }, { status: 503 });
     const [product] = await db.insert(products).values({ name, slug, category: category as "Jewellery" | "Beauty" | "Accessories", description, price, compareAtPrice, image, tag, stock, published: Boolean(body.published), featured: Boolean(body.featured), discount }).returning();
     return Response.json({ product }, { status: 201 });
-  } catch {
-    return Response.json({ error: "Failed to create product" }, { status: 500 });
+  } catch (error) {
+    console.error("[API] Admin product POST failed:", error);
+    return Response.json({ error: "Failed to create product. Please try again." }, { status: 500 });
   }
 }
