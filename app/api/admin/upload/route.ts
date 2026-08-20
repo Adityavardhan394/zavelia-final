@@ -1,4 +1,3 @@
-import { put } from "@vercel/blob";
 import { getChatGPTUser } from "../../../chatgpt-auth";
 import { BUSINESS } from "../../../../lib/config";
 
@@ -25,17 +24,17 @@ export async function POST(request: Request) {
       return Response.json({ error: "Only JPEG, PNG, WebP, or GIF images are allowed." }, { status: 400 });
     }
 
-    /* Validate file size (max 5MB) */
-    if (file.size > 5 * 1024 * 1024) {
-      return Response.json({ error: "Image must be under 5MB." }, { status: 400 });
+    /* Validate file size (max 2MB for base64 storage) */
+    if (file.size > 2 * 1024 * 1024) {
+      return Response.json({ error: "Image must be under 2MB." }, { status: 400 });
     }
 
-    /* Upload to Vercel Blob storage */
-    const blob = await put(`products/${Date.now()}-${file.name}`, file, {
-      access: "public",
-    });
+    /* Convert to base64 data URL — stored directly in the database */
+    const arrayBuffer = await file.arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString("base64");
+    const dataUrl = `data:${file.type};base64,${base64}`;
 
-    return Response.json({ url: blob.url }, { status: 201 });
+    return Response.json({ url: dataUrl }, { status: 201 });
   } catch (error) {
     console.error("[API] Upload failed:", error);
     return Response.json({ error: "Upload failed. Please try again." }, { status: 500 });

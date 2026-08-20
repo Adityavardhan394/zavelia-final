@@ -207,7 +207,7 @@ export default function AdminClient({user}:{user:string}){
             <label>Badge<input value={form.tag} onChange={e=>setForm({...form,tag:e.target.value})} placeholder="NEW"/></label>
             <label className="adm-wide">Description<textarea required minLength={10} value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="Product description"/></label>
             <label className="adm-wide">Image URL<input type="url" value={form.image} onChange={e=>setForm({...form,image:e.target.value})} placeholder="Paste image URL or upload below"/></label>
-            <label className="adm-wide adm-upload-area"><span>{uploading?"Uploading...":"Upload product image"}</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleImageUpload} disabled={uploading}/><em>JPEG, PNG, WebP, GIF (max 5MB)</em></label>
+            <label className="adm-wide adm-upload-area"><span>{uploading?"Uploading...":"Upload product image"}</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleImageUpload} disabled={uploading}/><em>JPEG, PNG, WebP, GIF (max 2MB)</em></label>
             {form.image&&<div className="adm-image-preview"><img src={form.image} alt="Preview"/><button type="button" onClick={()=>setForm({...form,image:""})} className="adm-remove-img">×</button></div>}
             <label className="adm-check"><input type="checkbox" checked={form.published} onChange={e=>setForm({...form,published:e.target.checked})}/>Published</label>
             <label className="adm-check"><input type="checkbox" checked={form.featured} onChange={e=>setForm({...form,featured:e.target.checked})}/>Featured</label>
