@@ -10,20 +10,23 @@ async function ok() { const u = await getChatGPTUser(); return Boolean(u && admi
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!await ok()) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
-  const body = await request.json() as Record<string, unknown>;
-  const update: Record<string, unknown> = { updatedAt: new Date().toISOString() };
-  if (typeof body.published === "boolean") update.published = body.published;
-  if (typeof body.stock === "number" && body.stock >= 0) update.stock = body.stock;
-  if (typeof body.price === "number" && body.price > 0) update.price = body.price;
-  if (typeof body.compareAtPrice === "number" || body.compareAtPrice === null) update.compareAtPrice = body.compareAtPrice;
-  if (typeof body.name === "string") update.name = body.name;
-  if (typeof body.description === "string") update.description = body.description;
-  if (typeof body.image === "string") update.image = body.image;
-  if (typeof body.tag === "string") update.tag = body.tag;
-  if (typeof body.category === "string") update.category = body.category;
-  if (typeof body.featured === "boolean") update.featured = body.featured;
-  if (typeof body.discount === "number") update.discount = body.discount;
   try {
+    const body = await request.json() as Record<string, unknown>;
+    const update: Record<string, unknown> = { updatedAt: new Date() };
+    if (typeof body.published === "boolean") update.published = body.published;
+    if (typeof body.featured === "boolean") update.featured = body.featured;
+    if (typeof body.stock === "number" && body.stock >= 0) update.stock = body.stock;
+    if (typeof body.price === "number" && body.price > 0) update.price = body.price;
+    if (body.compareAtPrice === null) update.compareAtPrice = null;
+    else if (typeof body.compareAtPrice === "number") update.compareAtPrice = body.compareAtPrice;
+    if (typeof body.discount === "number" && body.discount >= 0) update.discount = body.discount;
+    if (typeof body.lowStockThreshold === "number") update.lowStockThreshold = body.lowStockThreshold;
+    if (typeof body.name === "string" && body.name.trim()) update.name = body.name.trim();
+    if (typeof body.description === "string" && body.description.trim()) update.description = body.description.trim();
+    if (typeof body.image === "string" && body.image.trim()) update.image = body.image.trim();
+    if (typeof body.tag === "string") update.tag = body.tag.trim();
+    if (typeof body.category === "string" && body.category.trim()) update.category = body.category.trim();
+    console.log(`[API] PATCH product ${id}:`, JSON.stringify(update));
     const db = await getDb();
     const [product] = await db.update(products).set(update).where(eq(products.id, Number(id))).returning();
     return Response.json({ product });

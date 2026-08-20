@@ -179,6 +179,18 @@
 /* ── Discount badges ── */
 .adm-discount-badge{display:inline-block;background:#c0504d;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;margin-left:6px;letter-spacing:.04em}
 .storefront-discount{display:inline-block;background:var(--rose);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;margin-left:4px;letter-spacing:.04em}
+/* ── Upload area ── */
+.adm-upload-area{display:flex;align-items:center;gap:12px;padding:12px 16px;background:#f7f5f0;border:2px dashed #d5d2ca;border-radius:8px;cursor:pointer;transition:border-color .2s,background .2s}
+.adm-upload-area:hover{border-color:var(--rose);background:#faf8f3}
+.adm-upload-area span{font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap}
+.adm-upload-area input[type="file"]{flex:1;font-size:12px;color:#555;min-width:0}
+.adm-upload-area em{font-size:11px;color:#999;font-style:normal;white-space:nowrap}
+/* ── Image preview ── */
+.adm-image-preview{position:relative;display:inline-block;grid-column:span 2}
+.adm-image-preview img{width:120px;height:120px;object-fit:cover;border-radius:8px;border:1px solid #e2dfd8;display:block}
+.adm-image-preview span{display:block;font-size:10px;color:#888;margin-top:4px;text-align:center}
+.adm-remove-img{position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:50%;border:0;background:#c0504d;color:#fff;font-size:14px;font-weight:700;cursor:pointer;display:grid;place-items:center;line-height:1;transition:background .15s}
+.adm-remove-img:hover{background:#a03d38}
 /* ═══ MOBILE SIDEBAR ═══ */
 .mobile-sidebar-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:90;animation:fadeIn .2s ease}
 .mobile-sidebar{position:fixed;top:0;left:0;bottom:0;width:min(300px,82vw);background:#faf8f3;z-index:91;display:flex;flex-direction:column;animation:slideInLeft .25s ease;overflow-y:auto;-webkit-overflow-scrolling:touch}

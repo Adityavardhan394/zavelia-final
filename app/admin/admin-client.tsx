@@ -61,19 +61,23 @@ export default function AdminClient({user}:{user:string}){
   /* ── Product CRUD ── */
   const saveProduct=async(e:React.FormEvent)=>{
     e.preventDefault();setMsg("");
+    if(!form.image){setMsg("Please provide a product image (paste URL or upload).");setTimeout(()=>setMsg(""),3000);return}
     const data={...form,price:Number(form.price),compareAtPrice:form.compareAtPrice?Number(form.compareAtPrice):null,discount:form.discount?Number(form.discount):0,stock:Number(form.stock)};
+    const wasEditing=editId;
     try{
-      if(editId){
-        const r=await fetch(`/api/admin/products/${editId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
-        if(!r.ok){setMsg("Could not update product.");return}
+      if(wasEditing){
+        const r=await fetch(`/api/admin/products/${wasEditing}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
+        if(!r.ok){const d=await r.json().catch(()=>({}));setMsg(d.error||"Could not update product.");setTimeout(()=>setMsg(""),3000);return}
       } else {
         const r=await fetch("/api/admin/products",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
-        if(!r.ok){try{const d=await r.json();setMsg(d.error||"Could not save product.")}catch{setMsg("Could not save product.")}return}
+        if(!r.ok){try{const d=await r.json();setMsg(d.error||"Could not save product.")}catch{setMsg("Could not save product.")}setTimeout(()=>setMsg(""),3000);return}
       }
-    }catch{setMsg("Network error. Please try again.");return}
-    setForm(empty);setEditId(null);setMsg(editId?"Product updated.":"Product created.");loadProducts();setTimeout(()=>setMsg(""),3000);
+    }catch{setMsg("Network error. Please try again.");setTimeout(()=>setMsg(""),3000);return}
+    setForm(empty);setEditId(null);setMsg(wasEditing?"Product updated successfully.":"Product created.");loadProducts();setTimeout(()=>setMsg(""),3000);
   };
-  const patchProduct=async(id:number,data:Record<string,unknown>)=>{await fetch(`/api/admin/products/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});loadProducts()};
+  const [uploading,setUploading]=useState(false);
+  const patchProduct=async(id:number,data:Record<string,unknown>)=>{try{const r=await fetch(`/api/admin/products/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});if(!r.ok){const d=await r.json().catch(()=>({}));setMsg(d.error||"Update failed.");setTimeout(()=>setMsg(""),3000);return}loadProducts()}catch{setMsg("Network error updating product.");setTimeout(()=>setMsg(""),3000)}};
+  const handleImageUpload=async(e:React.ChangeEvent<HTMLInputElement>)=>{const file=e.target.files?.[0];if(!file)return;setUploading(true);try{const fd=new FormData();fd.append("file",file);const r=await fetch("/api/admin/upload",{method:"POST",body:fd});const d=await r.json();if(!r.ok){setMsg(d.error||"Upload failed.");setTimeout(()=>setMsg(""),3000);return}setForm({...form,image:d.url});setMsg("Image uploaded!");setTimeout(()=>setMsg(""),2000)}catch{setMsg("Upload failed.");setTimeout(()=>setMsg(""),3000)}finally{setUploading(false)}};
   const deleteProduct=async(id:number,name:string)=>{if(!confirm(`Delete ${name}?`))return;await fetch(`/api/admin/products/${id}`,{method:"DELETE"});loadProducts()};
   const startEdit=(p:Product)=>{setEditId(p.id);setForm({name:p.name,category:p.category,description:p.description,price:String(p.price),compareAtPrice:p.compareAtPrice?String(p.compareAtPrice):"",discount:p.discount?String(p.discount):"",image:p.image,tag:p.tag,stock:String(p.stock),published:p.published,featured:p.featured});setTab("products");if(typeof document!=="undefined")document.getElementById("product-form")?.scrollIntoView({behavior:"smooth"})};
 
@@ -202,7 +206,9 @@ export default function AdminClient({user}:{user:string}){
             <label>Stock<input required type="number" min="0" value={form.stock} onChange={e=>setForm({...form,stock:e.target.value})}/></label>
             <label>Badge<input value={form.tag} onChange={e=>setForm({...form,tag:e.target.value})} placeholder="NEW"/></label>
             <label className="adm-wide">Description<textarea required minLength={10} value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="Product description"/></label>
-            <label className="adm-wide">Image URL<input required type="url" value={form.image} onChange={e=>setForm({...form,image:e.target.value})} placeholder="https://..."/></label>
+            <label className="adm-wide">Image URL<input type="url" value={form.image} onChange={e=>setForm({...form,image:e.target.value})} placeholder="Paste image URL or upload below"/></label>
+            <label className="adm-wide adm-upload-area"><span>{uploading?"Uploading...":"Upload product image"}</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleImageUpload} disabled={uploading}/><em>JPEG, PNG, WebP, GIF (max 5MB)</em></label>
+            {form.image&&<div className="adm-image-preview"><img src={form.image} alt="Preview"/><button type="button" onClick={()=>setForm({...form,image:""})} className="adm-remove-img">×</button></div>}
             <label className="adm-check"><input type="checkbox" checked={form.published} onChange={e=>setForm({...form,published:e.target.checked})}/>Published</label>
             <label className="adm-check"><input type="checkbox" checked={form.featured} onChange={e=>setForm({...form,featured:e.target.checked})}/>Featured</label>
             <button className="adm-btn-primary" type="submit">{editId?"UPDATE PRODUCT":"ADD PRODUCT"}</button>
